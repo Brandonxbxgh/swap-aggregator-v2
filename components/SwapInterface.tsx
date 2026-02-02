@@ -146,7 +146,8 @@ export function SwapInterface() {
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to fetch quote'
       setError(errorMsg)
-      setErrorDetails(err instanceof Error && err.stack ? err.stack : '')
+      // Don't expose stack traces to users for security reasons
+      setErrorDetails('')
     } finally {
       setIsLoadingQuote(false)
     }

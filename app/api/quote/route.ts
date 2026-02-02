@@ -77,13 +77,22 @@ export async function GET(request: NextRequest) {
     // Log error for debugging
     console.error('[Quote API] Error:', error)
 
-    // Return detailed error to client
+    // Determine appropriate status code
+    let statusCode = 500
     const errorMessage = error instanceof Error ? error.message : 'Failed to fetch quote'
+    
+    // If error is from OpenOcean API, use 502 Bad Gateway
+    if (errorMessage.includes('OpenOcean API')) {
+      statusCode = 502
+    }
+
+    // Return detailed error to client
     const errorDetails = {
       error: errorMessage,
+      details: error instanceof Error ? error.message : undefined,
       timestamp: new Date().toISOString(),
     }
 
-    return NextResponse.json(errorDetails, { status: 500 })
+    return NextResponse.json(errorDetails, { status: statusCode })
   }
 }
