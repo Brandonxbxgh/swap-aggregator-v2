@@ -1,12 +1,16 @@
 'use client'
 
 import { useState } from 'react'
-import { useAccount, useChainId, useWriteContract, useWaitForTransactionReceipt, useSendTransaction } from 'wagmi'
+import { useAccount, useChainId, useWriteContract, useWaitForTransactionReceipt, useSendTransaction, useReadContract } from 'wagmi'
 import { parseUnits, Address, erc20Abi, isAddress } from 'viem'
 import { ChainSelector } from '@/components/ChainSelector'
 import { WalletConnect } from '@/components/WalletConnect'
 
 const NATIVE_TOKEN_ADDRESS = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'
+
+const isNativeToken = (token: string) => {
+  return token.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase()
+}
 
 export function SwapInterface() {
   const { address, isConnected } = useAccount()
@@ -31,9 +35,26 @@ export function SwapInterface() {
   const [error, setError] = useState<string>('')
   const [needsApproval, setNeedsApproval] = useState(false)
 
-  const isNativeToken = (token: string) => {
-    return token.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase()
-  }
+  // Read token decimals
+  const { data: tokenDecimals } = useReadContract({
+    address: tokenIn as Address,
+    abi: erc20Abi,
+    functionName: 'decimals',
+    query: {
+      enabled: isAddress(tokenIn) && !isNativeToken(tokenIn),
+    },
+  })
+
+  // Read current allowance
+  const { data: currentAllowance } = useReadContract({
+    address: tokenIn as Address,
+    abi: erc20Abi,
+    functionName: 'allowance',
+    args: address && quote ? [address, quote.to as Address] : undefined,
+    query: {
+      enabled: !!address && !!quote && isAddress(tokenIn) && !isNativeToken(tokenIn),
+    },
+  })
 
   const fetchQuote = async () => {
     if (!tokenIn || !tokenOut || !amountIn || !isConnected) {
@@ -60,8 +81,9 @@ export function SwapInterface() {
       const inAddress = isNativeToken(tokenIn) ? NATIVE_TOKEN_ADDRESS : tokenIn
       const outAddress = isNativeToken(tokenOut) ? NATIVE_TOKEN_ADDRESS : tokenOut
       
-      // Convert amount to wei (assuming 18 decimals for simplicity)
-      const amountInWei = parseUnits(amountIn, 18).toString()
+      // Use token decimals if available, otherwise default to 18
+      const effectiveDecimals = tokenDecimals || 18
+      const amountInWei = parseUnits(amountIn, effectiveDecimals).toString()
 
       const params = new URLSearchParams({
         chainId: chainId.toString(),
@@ -83,7 +105,10 @@ export function SwapInterface() {
 
       // Check if approval is needed for ERC20 tokens
       if (!isNativeToken(tokenIn)) {
-        setNeedsApproval(true)
+        // Check if we have sufficient allowance
+        const requiredAmount = BigInt(data.inAmount)
+        const hasAllowance = currentAllowance && currentAllowance >= requiredAmount
+        setNeedsApproval(!hasAllowance)
       } else {
         setNeedsApproval(false)
       }
@@ -146,9 +171,12 @@ export function SwapInterface() {
               type="text"
               value={tokenIn}
               onChange={(e) => setTokenIn(e.target.value)}
-              placeholder="0x... or native token address"
+              placeholder="0x... or 0xEeee...EEeE for native token"
               className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+            {tokenDecimals && (
+              <p className="text-xs text-gray-500 mt-1">Decimals: {tokenDecimals}</p>
+            )}
           </div>
 
           {/* Token Output */}
@@ -158,7 +186,7 @@ export function SwapInterface() {
               type="text"
               value={tokenOut}
               onChange={(e) => setTokenOut(e.target.value)}
-              placeholder="0x... or native token address"
+              placeholder="0x... or 0xEeee...EEeE for native token"
               className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>

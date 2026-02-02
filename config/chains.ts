@@ -1,7 +1,7 @@
 import { Chain } from 'viem'
 import { mainnet, bsc, polygon, arbitrum, optimism, base, avalanche } from 'viem/chains'
 
-export const SUPPORTED_CHAINS: Chain[] = [
+export const SUPPORTED_CHAINS = [
   mainnet,
   bsc,
   polygon,
@@ -9,7 +9,7 @@ export const SUPPORTED_CHAINS: Chain[] = [
   optimism,
   base,
   avalanche,
-]
+] as const
 
 export const CHAIN_NAMES: Record<number, string> = {
   [mainnet.id]: 'Ethereum',

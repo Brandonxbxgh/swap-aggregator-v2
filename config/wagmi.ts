@@ -9,7 +9,7 @@ if (!projectId) {
 }
 
 export const config = createConfig({
-  chains: SUPPORTED_CHAINS as any,
+  chains: SUPPORTED_CHAINS,
   connectors: [
     walletConnect({
       projectId,
