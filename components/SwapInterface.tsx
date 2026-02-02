@@ -28,18 +28,16 @@ export function SwapInterface() {
     const defaults = getDefaultTokens(chainId)
     const tokens = getTokensForChain(chainId)
     
-    // Check if current selections are available on new chain
-    const tokenInExists = tokens.some((t) => t.address.toLowerCase() === tokenIn.toLowerCase())
-    const tokenOutExists = tokens.some((t) => t.address.toLowerCase() === tokenOut.toLowerCase())
+    // Use functional updates to access latest state values
+    setTokenIn((currentTokenIn) => {
+      const tokenInExists = currentTokenIn && tokens.some((t) => t.address.toLowerCase() === currentTokenIn.toLowerCase())
+      return tokenInExists ? currentTokenIn : defaults.tokenIn
+    })
     
-    // If tokens don't exist on new chain or not set, use defaults
-    if (!tokenInExists || !tokenIn) {
-      setTokenIn(defaults.tokenIn)
-    }
-    if (!tokenOutExists || !tokenOut) {
-      setTokenOut(defaults.tokenOut)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setTokenOut((currentTokenOut) => {
+      const tokenOutExists = currentTokenOut && tokens.some((t) => t.address.toLowerCase() === currentTokenOut.toLowerCase())
+      return tokenOutExists ? currentTokenOut : defaults.tokenOut
+    })
   }, [chainId])
 
   const [amountIn, setAmountIn] = useState<string>('')
@@ -147,9 +145,10 @@ export function SwapInterface() {
     const temp = tokenIn
     setTokenIn(tokenOut)
     setTokenOut(temp)
-    // Clear quote when swapping
+    // Clear quote and amount when swapping
     setQuote(null)
     setError('')
+    setAmountIn('')
   }
 
   const approveToken = async () => {
