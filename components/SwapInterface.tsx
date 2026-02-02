@@ -1,16 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAccount, useChainId, useWriteContract, useWaitForTransactionReceipt, useSendTransaction, useReadContract } from 'wagmi'
 import { parseUnits, Address, erc20Abi, isAddress } from 'viem'
 import { ChainSelector } from '@/components/ChainSelector'
 import { WalletConnect } from '@/components/WalletConnect'
-
-const NATIVE_TOKEN_ADDRESS = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'
-
-const isNativeToken = (token: string) => {
-  return token.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase()
-}
+import { TokenSelect } from '@/components/TokenSelect'
+import { getTokensForChain, getDefaultTokens, findToken, isNativeToken, NATIVE_TOKEN_ADDRESS } from '@/lib/tokens'
 
 export function SwapInterface() {
   const { address, isConnected } = useAccount()
@@ -20,8 +16,30 @@ export function SwapInterface() {
   const { isLoading: isConfirmingApproval } = useWaitForTransactionReceipt({ hash: approvalHash })
   const { isLoading: isConfirmingSwap } = useWaitForTransactionReceipt({ hash: swapHash })
 
+  // Get available tokens for current chain
+  const availableTokens = getTokensForChain(chainId)
+
+  // Initialize token selections with defaults for current chain
   const [tokenIn, setTokenIn] = useState<string>('')
   const [tokenOut, setTokenOut] = useState<string>('')
+  
+  // Update token selections when chain changes
+  useEffect(() => {
+    const defaults = getDefaultTokens(chainId)
+    const tokens = getTokensForChain(chainId)
+    
+    // Use functional updates to access latest state values
+    setTokenIn((currentTokenIn) => {
+      const tokenInExists = currentTokenIn && tokens.some((t) => t.address.toLowerCase() === currentTokenIn.toLowerCase())
+      return tokenInExists ? currentTokenIn : defaults.tokenIn
+    })
+    
+    setTokenOut((currentTokenOut) => {
+      const tokenOutExists = currentTokenOut && tokens.some((t) => t.address.toLowerCase() === currentTokenOut.toLowerCase())
+      return tokenOutExists ? currentTokenOut : defaults.tokenOut
+    })
+  }, [chainId])
+
   const [amountIn, setAmountIn] = useState<string>('')
   const [quote, setQuote] = useState<{
     inAmount: string
@@ -35,13 +53,16 @@ export function SwapInterface() {
   const [error, setError] = useState<string>('')
   const [needsApproval, setNeedsApproval] = useState(false)
 
-  // Read token decimals
+  // Get token decimals from token data
+  const selectedTokenIn = findToken(chainId, tokenIn)
+
+  // Read token decimals (fallback for tokens not in our list)
   const { data: tokenDecimals } = useReadContract({
     address: tokenIn as Address,
     abi: erc20Abi,
     functionName: 'decimals',
     query: {
-      enabled: isAddress(tokenIn) && !isNativeToken(tokenIn),
+      enabled: isAddress(tokenIn) && !isNativeToken(tokenIn) && !selectedTokenIn,
     },
   })
 
@@ -82,8 +103,8 @@ export function SwapInterface() {
       const outAddress = isNativeToken(tokenOut) ? NATIVE_TOKEN_ADDRESS : tokenOut
       
       // Use token decimals if available, otherwise default to 18
-      const effectiveDecimals = tokenDecimals || 18
-      const amountInWei = parseUnits(amountIn, effectiveDecimals).toString()
+      const finalDecimals = selectedTokenIn?.decimals || tokenDecimals || 18
+      const amountInWei = parseUnits(amountIn, finalDecimals).toString()
 
       const params = new URLSearchParams({
         chainId: chainId.toString(),
@@ -117,6 +138,17 @@ export function SwapInterface() {
     } finally {
       setIsLoadingQuote(false)
     }
+  }
+
+  const swapTokens = () => {
+    // Swap tokenIn and tokenOut
+    const temp = tokenIn
+    setTokenIn(tokenOut)
+    setTokenOut(temp)
+    // Clear quote and amount when swapping
+    setQuote(null)
+    setError('')
+    setAmountIn('')
   }
 
   const approveToken = async () => {
@@ -166,28 +198,45 @@ export function SwapInterface() {
 
           {/* Token Input */}
           <div className="mb-4">
-            <label className="block text-sm font-medium mb-2">Token In Address</label>
-            <input
-              type="text"
-              value={tokenIn}
-              onChange={(e) => setTokenIn(e.target.value)}
-              placeholder="0x... or 0xEeee...EEeE for native token"
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
+            <TokenSelect
+              label="From"
+              tokens={availableTokens}
+              selectedToken={tokenIn}
+              onTokenChange={setTokenIn}
             />
-            {tokenDecimals && (
-              <p className="text-xs text-gray-500 mt-1">Decimals: {tokenDecimals}</p>
-            )}
+          </div>
+
+          {/* Swap Button */}
+          <div className="flex justify-center mb-4">
+            <button
+              onClick={swapTokens}
+              className="p-2 rounded-lg border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              aria-label="Swap tokens"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-6 w-6"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
+                />
+              </svg>
+            </button>
           </div>
 
           {/* Token Output */}
           <div className="mb-4">
-            <label className="block text-sm font-medium mb-2">Token Out Address</label>
-            <input
-              type="text"
-              value={tokenOut}
-              onChange={(e) => setTokenOut(e.target.value)}
-              placeholder="0x... or 0xEeee...EEeE for native token"
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
+            <TokenSelect
+              label="To"
+              tokens={availableTokens}
+              selectedToken={tokenOut}
+              onTokenChange={setTokenOut}
             />
           </div>
 
