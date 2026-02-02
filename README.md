@@ -7,6 +7,8 @@ A mobile-first Next.js application for non-custodial token swaps across major EV
 - 🔗 **Multi-Chain Support**: Ethereum, BNB Chain, Polygon, Arbitrum, Optimism, Base, and Avalanche C-Chain
 - 💼 **WalletConnect Integration**: Secure wallet connection with Ledger compatibility
 - 🔄 **Token Swaps**: Seamless token swapping using OpenOcean Swap API v4
+- 🎯 **Curated Token Lists**: Pre-configured lists of popular tokens for each chain
+- 🔃 **Quick Token Swap**: One-click button to flip token selections
 - 📱 **Mobile-First Design**: Optimized for mobile devices with responsive UI
 - ⚡ **Token Approval**: Automated ERC20 token approval flow
 - 🎨 **Modern UI**: Built with TailwindCSS for a beautiful user experience
@@ -83,20 +85,22 @@ pnpm start
 
 1. **Connect Wallet**: Click the "Connect with WalletConnect" button to connect your wallet
 2. **Select Chain**: Choose the blockchain network you want to use
-3. **Enter Token Details**:
-   - Token In Address: The token you want to swap from
-   - Token Out Address: The token you want to swap to
-   - Amount: The amount you want to swap
-4. **Get Quote**: Click "Get Quote" to fetch the swap details
-5. **Approve Token** (for ERC20 tokens): If needed, approve the token spending
-6. **Execute Swap**: Click "Execute Swap" to complete the transaction
+3. **Select Tokens**:
+   - Use the "From" dropdown to select the token you want to swap from
+   - Use the "To" dropdown to select the token you want to swap to
+   - Click the swap button (↕️) between dropdowns to quickly flip the token pair
+4. **Enter Amount**: Enter the amount you want to swap
+5. **Get Quote**: Click "Get Quote" to fetch the swap details
+6. **Approve Token** (for ERC20 tokens): If needed, approve the token spending
+7. **Execute Swap**: Click "Execute Swap" to complete the transaction
 
-### Native Token Address
+### Token Selection
 
-For native tokens (ETH, BNB, MATIC, etc.), use the address:
-```
-0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE
-```
+The application includes curated token lists for each supported chain:
+- **Common tokens**: ETH, USDT, USDC, DAI, WBTC, and other popular tokens
+- **Native tokens**: Automatically included for each chain (ETH, BNB, MATIC, AVAX)
+- **Stablecoins**: Major stablecoins available on each network
+- Tokens are automatically filtered based on the selected chain
 
 ## Supported Chains
 
@@ -125,6 +129,7 @@ app/
 components/
 ├── ChainSelector.tsx       # Chain selection component
 ├── SwapInterface.tsx       # Main swap interface
+├── TokenSelect.tsx         # Token dropdown component
 └── WalletConnect.tsx       # Wallet connection component
 
 config/
@@ -133,7 +138,8 @@ config/
 
 lib/
 ├── openocean-adapter.ts    # OpenOcean API adapter
-└── swap-provider.ts        # Swap provider interface
+├── swap-provider.ts        # Swap provider interface
+└── tokens.ts               # Token lists and utilities
 ```
 
 ### Adapter Pattern
