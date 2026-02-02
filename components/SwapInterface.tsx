@@ -51,6 +51,8 @@ export function SwapInterface() {
   } | null>(null)
   const [isLoadingQuote, setIsLoadingQuote] = useState(false)
   const [error, setError] = useState<string>('')
+  const [errorDetails, setErrorDetails] = useState<string>('')
+  const [showErrorDetails, setShowErrorDetails] = useState(false)
   const [needsApproval, setNeedsApproval] = useState(false)
 
   // Get token decimals from token data
@@ -95,6 +97,8 @@ export function SwapInterface() {
 
     setIsLoadingQuote(true)
     setError('')
+    setErrorDetails('')
+    setShowErrorDetails(false)
     setQuote(null)
 
     try {
@@ -115,11 +119,17 @@ export function SwapInterface() {
         slippage: '1',
       })
 
-      const response = await fetch(`/api/swap/quote?${params}`)
+      const response = await fetch(`/api/quote?${params}`)
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to fetch quote')
+        const errorMsg = data.error || 'Failed to fetch quote'
+        const details = data.details || data.timestamp ? 
+          `${data.details || ''}\n${data.timestamp ? `Time: ${data.timestamp}` : ''}`.trim() : 
+          ''
+        setError(errorMsg)
+        setErrorDetails(details)
+        return
       }
 
       setQuote(data)
@@ -134,7 +144,10 @@ export function SwapInterface() {
         setNeedsApproval(false)
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch quote')
+      const errorMsg = err instanceof Error ? err.message : 'Failed to fetch quote'
+      setError(errorMsg)
+      // Don't expose stack traces to users for security reasons
+      setErrorDetails('')
     } finally {
       setIsLoadingQuote(false)
     }
@@ -145,9 +158,11 @@ export function SwapInterface() {
     const temp = tokenIn
     setTokenIn(tokenOut)
     setTokenOut(temp)
-    // Clear quote and amount when swapping
+    // Clear quote, error, and amount when swapping
     setQuote(null)
     setError('')
+    setErrorDetails('')
+    setShowErrorDetails(false)
     setAmountIn('')
   }
 
@@ -263,8 +278,42 @@ export function SwapInterface() {
 
           {/* Error Display */}
           {error && (
-            <div className="mb-4 p-3 bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 rounded-lg text-sm">
-              {error}
+            <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg">
+              <div className="flex items-start gap-2">
+                <svg 
+                  className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    strokeWidth={2} 
+                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" 
+                  />
+                </svg>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-red-800 dark:text-red-200">
+                    {error}
+                  </p>
+                  {errorDetails && (
+                    <div className="mt-2">
+                      <button
+                        onClick={() => setShowErrorDetails(!showErrorDetails)}
+                        className="text-xs text-red-700 dark:text-red-300 hover:underline focus:outline-none"
+                      >
+                        {showErrorDetails ? '▼ Hide details' : '▶ Show details'}
+                      </button>
+                      {showErrorDetails && (
+                        <pre className="mt-2 text-xs text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-900/50 p-2 rounded overflow-x-auto whitespace-pre-wrap break-words">
+                          {errorDetails}
+                        </pre>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
