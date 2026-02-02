@@ -41,14 +41,21 @@ export class OpenOceanAdapter implements SwapProvider {
     const response = await fetch(url.toString(), { headers })
 
     if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`OpenOcean API error: ${response.status} - ${errorText}`)
+      let errorText = ''
+      try {
+        errorText = await response.text()
+      } catch {
+        errorText = 'Unable to read error response'
+      }
+      throw new Error(`OpenOcean API returned ${response.status}: ${errorText || response.statusText}`)
     }
 
     const data = await response.json()
 
     if (data.code !== 200) {
-      throw new Error(`OpenOcean error: ${data.message || 'Unknown error'}`)
+      const errorMessage = data.message || data.error || 'Request failed'
+      const errorDetail = data.data ? ` - ${JSON.stringify(data.data)}` : ''
+      throw new Error(`OpenOcean API error (code ${data.code}): ${errorMessage}${errorDetail}`)
     }
 
     return {
