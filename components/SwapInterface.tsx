@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAccount, useChainId, useWriteContract, useWaitForTransactionReceipt, useSendTransaction, useReadContract } from 'wagmi'
 import { parseUnits, Address, erc20Abi, isAddress } from 'viem'
 import { ChainSelector } from '@/components/ChainSelector'
@@ -110,6 +110,9 @@ export function SwapInterface() {
     },
   })
 
+  // AbortController ref to manage fetch requests
+  const abortControllerRef = useRef<AbortController | null>(null)
+
   const fetchQuote = async () => {
     if (!tokenIn || !tokenOut || !amountIn || !isConnected) {
       setError('Please fill in all fields and connect wallet')
@@ -125,6 +128,19 @@ export function SwapInterface() {
       setError('Invalid tokenOut address')
       return
     }
+
+    // Abort any in-progress request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+
+    // Create new AbortController for this request
+    abortControllerRef.current = new AbortController()
+    const timeoutId = setTimeout(() => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+    }, 15000) // 15 second timeout
 
     setIsLoadingQuote(true)
     setError('')
@@ -150,7 +166,13 @@ export function SwapInterface() {
         slippageBps: slippageBps.toString(),
       })
 
-      const response = await fetch(`/api/quote?${params}`)
+      const response = await fetch(`/api/quote?${params}`, {
+        signal: abortControllerRef.current.signal,
+      })
+
+      // Clear timeout on successful response
+      clearTimeout(timeoutId)
+
       const data = await response.json()
 
       if (!response.ok) {
@@ -175,12 +197,22 @@ export function SwapInterface() {
         setNeedsApproval(false)
       }
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to fetch quote'
-      setError(errorMsg)
-      // Don't expose stack traces to users for security reasons
-      setErrorDetails('')
+      // Clear timeout on error
+      clearTimeout(timeoutId)
+      
+      // Handle abort errors specifically
+      if (err instanceof Error && err.name === 'AbortError') {
+        setError('Request was cancelled or timed out. Please try again.')
+        setErrorDetails('')
+      } else {
+        const errorMsg = err instanceof Error ? err.message : 'Failed to fetch quote'
+        setError(errorMsg)
+        // Don't expose stack traces to users for security reasons
+        setErrorDetails('')
+      }
     } finally {
       setIsLoadingQuote(false)
+      abortControllerRef.current = null
     }
   }
 

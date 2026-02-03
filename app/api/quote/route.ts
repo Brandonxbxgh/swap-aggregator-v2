@@ -22,7 +22,12 @@ export async function GET(request: NextRequest) {
           error: 'Missing required parameters',
           details: 'chainId, inTokenAddress, outTokenAddress, and amount are required'
         },
-        { status: 400 }
+        { 
+          status: 400,
+          headers: {
+            'Cache-Control': 'no-store',
+          },
+        }
       )
     }
 
@@ -30,7 +35,12 @@ export async function GET(request: NextRequest) {
     if (isNaN(parsedChainId)) {
       return NextResponse.json(
         { error: 'Invalid chainId', details: 'chainId must be a valid number' },
-        { status: 400 }
+        { 
+          status: 400,
+          headers: {
+            'Cache-Control': 'no-store',
+          },
+        }
       )
     }
 
@@ -42,7 +52,12 @@ export async function GET(request: NextRequest) {
           error: 'Unsupported chain',
           details: `Chain ID ${parsedChainId} is not supported by OpenOcean`
         },
-        { status: 400 }
+        { 
+          status: 400,
+          headers: {
+            'Cache-Control': 'no-store',
+          },
+        }
       )
     }
 
@@ -56,7 +71,12 @@ export async function GET(request: NextRequest) {
           error: 'Invalid slippage',
           details: 'slippageBps must be between 1 and 9999 (0.01% to 99.99%)'
         },
-        { status: 400 }
+        { 
+          status: 400,
+          headers: {
+            'Cache-Control': 'no-store',
+          },
+        }
       )
     }
     
@@ -151,7 +171,12 @@ export async function GET(request: NextRequest) {
               error: 'Invalid quote received',
               details: `The quote appears to have an impossible exchange rate. Expected reasonable ratio but got output >> input. This may indicate an API parameter error. Please try again or contact support.`,
             },
-            { status: 502 }
+            { 
+              status: 502,
+              headers: {
+                'Cache-Control': 'no-store',
+              },
+            }
           )
         }
       }
@@ -236,7 +261,11 @@ export async function GET(request: NextRequest) {
       } : undefined,
     }
 
-    return NextResponse.json(enhancedQuote)
+    return NextResponse.json(enhancedQuote, {
+      headers: {
+        'Cache-Control': 'no-store',
+      },
+    })
   } catch (error) {
     // Log error for debugging
     console.error('[Quote API] Error:', error)
@@ -262,6 +291,11 @@ export async function GET(request: NextRequest) {
       timestamp: new Date().toISOString(),
     }
 
-    return NextResponse.json(errorDetails, { status: statusCode })
+    return NextResponse.json(errorDetails, { 
+      status: statusCode,
+      headers: {
+        'Cache-Control': 'no-store',
+      },
+    })
   }
 }
