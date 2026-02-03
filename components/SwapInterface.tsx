@@ -307,8 +307,13 @@ export function SwapInterface() {
               type="number"
               value={slippageBps / 100}
               onChange={(e) => {
-                const percent = parseFloat(e.target.value) || 0
-                setSlippageBps(Math.round(percent * 100))
+                const percent = parseFloat(e.target.value)
+                // Ensure valid range: 0.1% to 50%
+                if (!isNaN(percent) && percent >= 0.1 && percent <= 50) {
+                  setSlippageBps(Math.round(percent * 100))
+                } else if (percent < 0.1) {
+                  setSlippageBps(10) // Minimum 0.1%
+                }
               }}
               step="0.1"
               min="0.1"

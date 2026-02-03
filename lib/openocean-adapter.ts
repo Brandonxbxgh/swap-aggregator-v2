@@ -39,7 +39,7 @@ export class OpenOceanAdapter implements SwapProvider {
       throw new Error(`Unsupported chain ID: ${params.chainId}`)
     }
 
-    // Compute gas price to use: prefer provided gasPrice, otherwise compute it
+    // Calculate gas price to use: prefer provided gasPrice, otherwise compute it
     let gasPriceToUse = params.gasPrice
 
     if (!gasPriceToUse) {

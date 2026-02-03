@@ -21,6 +21,18 @@ export async function GET(request: NextRequest) {
 
     // Parse slippage in BPS (basis points), default to 100 BPS = 1%
     const slippageBps = slippageBpsParam ? parseInt(slippageBpsParam) : 100
+    
+    // Validate slippage is within reasonable range (0.01% to 99.99%)
+    if (slippageBps <= 0 || slippageBps >= 10000) {
+      return NextResponse.json(
+        { 
+          error: 'Invalid slippage',
+          details: 'slippageBps must be between 1 and 9999 (0.01% to 99.99%)'
+        },
+        { status: 400 }
+      )
+    }
+    
     // Convert BPS to percentage for OpenOcean API (100 BPS = 1%)
     const slippagePercent = slippageBps / 100
 
