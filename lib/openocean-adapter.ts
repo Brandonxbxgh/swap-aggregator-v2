@@ -1,6 +1,7 @@
 import { SwapProvider, QuoteParams, SwapQuote } from './swap-provider'
 import { getOpenOceanChainId, getChainById } from '@/config/chains'
 import { createPublicClient, http, PublicClient } from 'viem'
+import { RPC_URLS } from '@/config/rpc'
 
 // OpenOcean API V4 endpoint
 const OPENOCEAN_API_BASE = 'https://open-api.openocean.finance/v4'
@@ -25,9 +26,10 @@ export class OpenOceanAdapter implements SwapProvider {
         throw new Error(`Chain configuration not found for chain ID: ${chainId}`)
       }
 
+      const rpcUrl = RPC_URLS[chainId]
       const client = createPublicClient({
         chain,
-        transport: http(),
+        transport: http(rpcUrl || undefined),
       })
       clientCache.set(chainId, client)
     }
@@ -44,21 +46,33 @@ export class OpenOceanAdapter implements SwapProvider {
     let gasPriceToUse = params.gasPrice
 
     if (!gasPriceToUse) {
-      const client = this.getOrCreateClient(params.chainId)
+      try {
+        const client = this.getOrCreateClient(params.chainId)
 
-      if (LEGACY_CHAINS.includes(params.chainId)) {
-        // For legacy chains, fetch gasPrice
-        const gasPriceBigInt = await client.getGasPrice()
-        gasPriceToUse = gasPriceBigInt.toString()
-      } else {
-        // For EIP-1559 chains, fetch maxFeePerGas
-        // OpenOcean API uses gasPrice parameter for both legacy and EIP-1559 chains
-        const feeData = await client.estimateFeesPerGas()
-        if (feeData.maxFeePerGas) {
-          gasPriceToUse = feeData.maxFeePerGas.toString()
+        if (LEGACY_CHAINS.includes(params.chainId)) {
+          // For legacy chains, fetch gasPrice
+          const gasPriceBigInt = await client.getGasPrice()
+          gasPriceToUse = gasPriceBigInt.toString()
         } else {
-          throw new Error(`Failed to fetch gas price for chain ${params.chainId}: maxFeePerGas is not available`)
+          // For EIP-1559 chains, fetch maxFeePerGas
+          // OpenOcean API uses gasPrice parameter for both legacy and EIP-1559 chains
+          const feeData = await client.estimateFeesPerGas()
+          if (feeData.maxFeePerGas) {
+            gasPriceToUse = feeData.maxFeePerGas.toString()
+          } else {
+            throw new Error(`Failed to fetch gas price for chain ${params.chainId}: maxFeePerGas is not available`)
+          }
         }
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err)
+        const errorMsgLower = errorMsg.toLowerCase()
+        // Check for common RPC rate limit or connection errors
+        if (errorMsgLower.includes('429') || errorMsgLower.includes('rate limit') || 
+            errorMsgLower.includes('too many requests') || errorMsgLower.includes('throttle')) {
+          throw new Error('RPC rate limited or unavailable')
+        }
+        // Re-throw the original error if it's not a rate limit issue
+        throw err
       }
     }
 

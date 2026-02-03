@@ -1,6 +1,7 @@
 import { http, createConfig } from 'wagmi'
 import { walletConnect } from 'wagmi/connectors'
 import { SUPPORTED_CHAINS } from './chains'
+import { RPC_URLS } from './rpc'
 
 const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || ''
 
@@ -29,7 +30,8 @@ export const config = createConfig({
     }),
   ],
   transports: SUPPORTED_CHAINS.reduce((acc, chain) => {
-    acc[chain.id] = http()
+    const rpcUrl = RPC_URLS[chain.id]
+    acc[chain.id] = http(rpcUrl || undefined)
     return acc
   }, {} as Record<number, ReturnType<typeof http>>),
 })
