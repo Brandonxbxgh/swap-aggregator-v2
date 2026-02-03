@@ -39,22 +39,22 @@ export class OpenOceanAdapter implements SwapProvider {
       throw new Error(`Unsupported chain ID: ${params.chainId}`)
     }
 
-    // Fetch gas price if not provided
-    let gasPrice = params.gasPrice
+    // Calculate gas price to use: prefer provided gasPrice, otherwise compute it
+    let gasPriceToUse = params.gasPrice
 
-    if (!gasPrice) {
+    if (!gasPriceToUse) {
       const client = this.getOrCreateClient(params.chainId)
 
       if (LEGACY_CHAINS.includes(params.chainId)) {
         // For legacy chains, fetch gasPrice
         const gasPriceBigInt = await client.getGasPrice()
-        gasPrice = gasPriceBigInt.toString()
+        gasPriceToUse = gasPriceBigInt.toString()
       } else {
-        // For EIP-1559 chains, fetch maxFeePerGas and maxPriorityFeePerGas
+        // For EIP-1559 chains, fetch maxFeePerGas
         // OpenOcean API uses gasPrice parameter for both legacy and EIP-1559 chains
         const feeData = await client.estimateFeesPerGas()
         if (feeData.maxFeePerGas) {
-          gasPrice = feeData.maxFeePerGas.toString()
+          gasPriceToUse = feeData.maxFeePerGas.toString()
         } else {
           throw new Error(`Failed to fetch gas price for chain ${params.chainId}: maxFeePerGas is not available`)
         }
@@ -62,17 +62,18 @@ export class OpenOceanAdapter implements SwapProvider {
     }
 
     const url = new URL(`${OPENOCEAN_API_BASE}/${chainName}/swap`)
-    url.searchParams.append('inTokenAddress', params.inTokenAddress)
-    url.searchParams.append('outTokenAddress', params.outTokenAddress)
-    url.searchParams.append('amount', params.amount)
-    url.searchParams.append('slippage', (params.slippage || 1).toString())
+    url.searchParams.set('inTokenAddress', params.inTokenAddress)
+    url.searchParams.set('outTokenAddress', params.outTokenAddress)
+    url.searchParams.set('amount', params.amount)
+    url.searchParams.set('slippage', (params.slippage || 1).toString())
     
-    if (gasPrice) {
-      url.searchParams.append('gasPrice', gasPrice)
+    // Append gasPrice exactly once if available
+    if (gasPriceToUse) {
+      url.searchParams.set('gasPrice', gasPriceToUse)
     }
     
     if (params.account) {
-      url.searchParams.append('account', params.account)
+      url.searchParams.set('account', params.account)
     }
 
     const headers: Record<string, string> = {
@@ -107,6 +108,7 @@ export class OpenOceanAdapter implements SwapProvider {
       inAmount: data.data.inAmount,
       outAmount: data.data.outAmount,
       estimatedGas: data.data.estimatedGas,
+      gasPriceWei: gasPriceToUse, // Include the gas price used
       data: data.data.data,
       to: data.data.to,
       value: data.data.value || '0',

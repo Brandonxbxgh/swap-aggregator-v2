@@ -8,6 +8,20 @@ import { WalletConnect } from '@/components/WalletConnect'
 import { TokenSelect } from '@/components/TokenSelect'
 import { getTokensForChain, getDefaultTokens, findToken, isNativeToken, NATIVE_TOKEN_ADDRESS } from '@/lib/tokens'
 
+// Helper function to get native symbol for a chain
+function getNativeSymbol(chainId: number): string {
+  const nativeSymbols: Record<number, string> = {
+    1: 'ETH',      // Ethereum
+    56: 'BNB',     // BNB Chain
+    137: 'MATIC',  // Polygon
+    42161: 'ETH',  // Arbitrum
+    10: 'ETH',     // Optimism
+    8453: 'ETH',   // Base
+    43114: 'AVAX', // Avalanche
+  }
+  return nativeSymbols[chainId] || 'ETH'
+}
+
 export function SwapInterface() {
   const { address, isConnected } = useAccount()
   const chainId = useChainId()
@@ -44,16 +58,33 @@ export function SwapInterface() {
   const [quote, setQuote] = useState<{
     inAmount: string
     outAmount: string
+    outAmountRaw?: string
+    minReceivedRaw?: string
+    minReceived?: string
     estimatedGas: string
+    gasPriceWei?: string
+    gasCostWei?: string
+    gasCostNative?: string
     data: string
     to: string
     value: string
+    tokenIn?: {
+      address: string
+      symbol: string
+      decimals: number
+    }
+    tokenOut?: {
+      address: string
+      symbol: string
+      decimals: number
+    }
   } | null>(null)
   const [isLoadingQuote, setIsLoadingQuote] = useState(false)
   const [error, setError] = useState<string>('')
   const [errorDetails, setErrorDetails] = useState<string>('')
   const [showErrorDetails, setShowErrorDetails] = useState(false)
   const [needsApproval, setNeedsApproval] = useState(false)
+  const [slippageBps, setSlippageBps] = useState<number>(100) // Default 100 BPS = 1%
 
   // Get token decimals from token data
   const selectedTokenIn = findToken(chainId, tokenIn)
@@ -116,7 +147,7 @@ export function SwapInterface() {
         outTokenAddress: outAddress,
         amount: amountInWei,
         account: address || '',
-        slippage: '1',
+        slippageBps: slippageBps.toString(),
       })
 
       const response = await fetch(`/api/quote?${params}`)
@@ -256,7 +287,7 @@ export function SwapInterface() {
           </div>
 
           {/* Amount Input */}
-          <div className="mb-6">
+          <div className="mb-4">
             <label className="block text-sm font-medium mb-2">Amount</label>
             <input
               type="text"
@@ -265,6 +296,34 @@ export function SwapInterface() {
               placeholder="0.0"
               className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+          </div>
+
+          {/* Slippage Input */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium mb-2">
+              Slippage Tolerance (%)
+            </label>
+            <input
+              type="number"
+              value={slippageBps / 100}
+              onChange={(e) => {
+                const percent = parseFloat(e.target.value)
+                // Ensure valid range: 0.1% to 50%
+                if (!isNaN(percent) && percent >= 0.1 && percent <= 50) {
+                  setSlippageBps(Math.round(percent * 100))
+                } else if (percent < 0.1) {
+                  setSlippageBps(10) // Minimum 0.1%
+                }
+              }}
+              step="0.1"
+              min="0.1"
+              max="50"
+              placeholder="1.0"
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-gray-800 text-foreground focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Current: {slippageBps / 100}% ({slippageBps} basis points)
+            </p>
           </div>
 
           {/* Get Quote Button */}
@@ -320,10 +379,43 @@ export function SwapInterface() {
           {/* Quote Display */}
           {quote && (
             <div className="mb-6 p-4 bg-gray-100 dark:bg-gray-700 rounded-lg">
-              <h3 className="font-semibold mb-2">Quote</h3>
-              <div className="text-sm space-y-1">
-                <div>Output Amount: {quote.outAmount}</div>
-                <div>Estimated Gas: {quote.estimatedGas}</div>
+              <h3 className="font-semibold mb-3">Quote</h3>
+              <div className="text-sm space-y-2">
+                {/* Output Amount */}
+                <div className="flex justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">Output:</span>
+                  <span className="font-medium">
+                    ~ {quote.outAmount} {quote.tokenOut?.symbol || ''}
+                  </span>
+                </div>
+                
+                {/* Min Received */}
+                {quote.minReceived && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">Min received ({slippageBps / 100}% slippage):</span>
+                    <span className="font-medium">
+                      {quote.minReceived} {quote.tokenOut?.symbol || ''}
+                    </span>
+                  </div>
+                )}
+                
+                {/* Estimated Gas Units */}
+                <div className="flex justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">Estimated gas units:</span>
+                  <span className="font-medium">
+                    {parseInt(quote.estimatedGas).toLocaleString()}
+                  </span>
+                </div>
+                
+                {/* Estimated Gas Cost */}
+                {quote.gasCostNative && parseFloat(quote.gasCostNative) > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">Estimated gas cost:</span>
+                    <span className="font-medium">
+                      ~ {parseFloat(quote.gasCostNative).toFixed(6)} {getNativeSymbol(chainId)}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Approval Button (only for ERC20) */}
