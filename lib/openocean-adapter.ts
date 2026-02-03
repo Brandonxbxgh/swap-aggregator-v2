@@ -2,6 +2,7 @@ import { SwapProvider, QuoteParams, SwapQuote } from './swap-provider'
 import { getOpenOceanChainId, getChainById } from '@/config/chains'
 import { createPublicClient, http, PublicClient } from 'viem'
 
+// OpenOcean API V4 endpoint
 const OPENOCEAN_API_BASE = 'https://open-api.openocean.finance/v4'
 
 // Legacy chains that use gasPrice instead of EIP-1559
