@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
     const outTokenAddress = searchParams.get('outTokenAddress')
     const amount = searchParams.get('amount')
     const account = searchParams.get('account')
-    const slippage = searchParams.get('slippage')
+    const slippageBpsParam = searchParams.get('slippageBps')
     const gasPrice = searchParams.get('gasPrice')
 
     if (!chainId || !inTokenAddress || !outTokenAddress || !amount) {
@@ -18,6 +18,11 @@ export async function GET(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    // Parse slippage in BPS (basis points), default to 100 BPS = 1%
+    const slippageBps = slippageBpsParam ? parseInt(slippageBpsParam) : 100
+    // Convert BPS to percentage for OpenOcean API (100 BPS = 1%)
+    const slippagePercent = slippageBps / 100
 
     const apiKey = process.env.OPENOCEAN_API_KEY
     const adapter = new OpenOceanAdapter(apiKey)
@@ -28,7 +33,7 @@ export async function GET(request: NextRequest) {
       outTokenAddress,
       amount,
       account: account || undefined,
-      slippage: slippage ? parseFloat(slippage) : undefined,
+      slippage: slippagePercent,
       gasPrice: gasPrice || undefined,
     })
 

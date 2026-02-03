@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { OpenOceanAdapter } from '@/lib/openocean-adapter'
 import { getOpenOceanChainId } from '@/config/chains'
+import { findToken } from '@/lib/tokens'
+import { formatUnits } from 'viem'
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,7 +12,7 @@ export async function GET(request: NextRequest) {
     const outTokenAddress = searchParams.get('outTokenAddress')
     const amount = searchParams.get('amount')
     const account = searchParams.get('account')
-    const slippage = searchParams.get('slippage')
+    const slippageBpsParam = searchParams.get('slippageBps')
     const gasPrice = searchParams.get('gasPrice')
 
     // Validation
@@ -44,6 +46,11 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // Parse slippage in BPS (basis points), default to 100 BPS = 1%
+    const slippageBps = slippageBpsParam ? parseInt(slippageBpsParam) : 100
+    // Convert BPS to percentage for OpenOcean API (100 BPS = 1%)
+    const slippagePercent = slippageBps / 100
+
     // Log request for debugging (without exposing sensitive data)
     console.log('[Quote API] Request:', {
       chainId: parsedChainId,
@@ -51,7 +58,8 @@ export async function GET(request: NextRequest) {
       inToken: inTokenAddress.substring(0, 10) + '...',
       outToken: outTokenAddress.substring(0, 10) + '...',
       hasAccount: !!account,
-      slippage: slippage || 'default',
+      slippageBps,
+      slippagePercent,
     })
 
     const apiKey = process.env.OPENOCEAN_API_KEY
@@ -63,16 +71,95 @@ export async function GET(request: NextRequest) {
       outTokenAddress,
       amount,
       account: account || undefined,
-      slippage: slippage ? parseFloat(slippage) : undefined,
+      slippage: slippagePercent,
       gasPrice: gasPrice || undefined,
     })
 
+    // Find token information
+    const tokenInInfo = findToken(parsedChainId, inTokenAddress)
+    const tokenOutInfo = findToken(parsedChainId, outTokenAddress)
+
+    // Store the original raw outAmount
+    const outAmountRaw = quote.outAmount
+
+    // Format human-readable outAmount if tokenOut decimals are available
+    let outAmount = outAmountRaw
+    if (tokenOutInfo?.decimals) {
+      try {
+        outAmount = formatUnits(BigInt(outAmountRaw), tokenOutInfo.decimals)
+      } catch (e) {
+        console.warn('[Quote API] Failed to format outAmount:', e)
+      }
+    }
+
+    // Calculate min received after slippage
+    // minReceivedRaw = outAmountRaw * (10000 - slippageBps) / 10000
+    let minReceivedRaw = '0'
+    let minReceived = '0'
+    try {
+      const outAmountBigInt = BigInt(outAmountRaw)
+      const minReceivedBigInt = (outAmountBigInt * BigInt(10000 - slippageBps)) / BigInt(10000)
+      minReceivedRaw = minReceivedBigInt.toString()
+      
+      // Format human-readable minReceived if tokenOut decimals are available
+      if (tokenOutInfo?.decimals) {
+        minReceived = formatUnits(minReceivedBigInt, tokenOutInfo.decimals)
+      } else {
+        minReceived = minReceivedRaw
+      }
+    } catch (e) {
+      console.warn('[Quote API] Failed to calculate minReceived:', e)
+    }
+
+    // Get gas price from quote response
+    const gasPriceWei = quote.gasPriceWei || '0'
+    
+    // Calculate gas cost
+    let gasCostWei = '0'
+    let gasCostNative = '0'
+    try {
+      if (gasPriceWei && quote.estimatedGas) {
+        const estimatedGasUnits = BigInt(quote.estimatedGas)
+        const gasPriceBigInt = BigInt(gasPriceWei)
+        const gasCostBigInt = estimatedGasUnits * gasPriceBigInt
+        gasCostWei = gasCostBigInt.toString()
+        gasCostNative = formatUnits(gasCostBigInt, 18)
+      }
+    } catch (e) {
+      console.warn('[Quote API] Failed to calculate gas cost:', e)
+    }
+
     console.log('[Quote API] Success:', {
-      outAmount: quote.outAmount,
+      outAmountRaw,
+      outAmount,
+      minReceivedRaw,
+      minReceived,
       estimatedGas: quote.estimatedGas,
     })
 
-    return NextResponse.json(quote)
+    // Build enhanced response
+    const enhancedQuote = {
+      ...quote,
+      outAmountRaw,
+      outAmount,
+      minReceivedRaw,
+      minReceived,
+      gasPriceWei,
+      gasCostWei,
+      gasCostNative,
+      tokenIn: tokenInInfo ? {
+        address: tokenInInfo.address,
+        symbol: tokenInInfo.symbol,
+        decimals: tokenInInfo.decimals,
+      } : undefined,
+      tokenOut: tokenOutInfo ? {
+        address: tokenOutInfo.address,
+        symbol: tokenOutInfo.symbol,
+        decimals: tokenOutInfo.decimals,
+      } : undefined,
+    }
+
+    return NextResponse.json(enhancedQuote)
   } catch (error) {
     // Log error for debugging
     console.error('[Quote API] Error:', error)
