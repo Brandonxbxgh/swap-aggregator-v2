@@ -411,7 +411,7 @@ export function SwapInterface() {
                 <div className="flex justify-between">
                   <span className="text-gray-600 dark:text-gray-400">Estimated gas:</span>
                   <span className="font-medium">
-                    {parseInt(quote.estimatedGas).toLocaleString()} units
+                    {Number(quote.estimatedGas).toLocaleString()} units
                   </span>
                 </div>
                 

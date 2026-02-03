@@ -116,15 +116,26 @@ export async function GET(request: NextRequest) {
       // Only check if both token decimals are known
       if (tokenInInfo?.decimals && tokenOutInfo?.decimals) {
         // Normalize both amounts to 18 decimals for comparison
+        // Handle tokens with > 18 decimals by dividing instead of multiplying
         const inAmountNormalized = tokenInInfo.decimals === 18 
           ? inAmountBigInt 
-          : inAmountBigInt * BigInt(10 ** (18 - tokenInInfo.decimals))
+          : tokenInInfo.decimals < 18
+            ? inAmountBigInt * BigInt(10 ** (18 - tokenInInfo.decimals))
+            : inAmountBigInt / BigInt(10 ** (tokenInInfo.decimals - 18))
         const outAmountNormalized = tokenOutInfo.decimals === 18 
           ? outAmountBigInt 
-          : outAmountBigInt * BigInt(10 ** (18 - tokenOutInfo.decimals))
+          : tokenOutInfo.decimals < 18
+            ? outAmountBigInt * BigInt(10 ** (18 - tokenOutInfo.decimals))
+            : outAmountBigInt / BigInt(10 ** (tokenOutInfo.decimals - 18))
         
         // Check if output is more than 1000x the input (clearly impossible for most token pairs)
         if (outAmountNormalized > inAmountNormalized * BigInt(1000)) {
+          // Calculate ratio using floating point for display (multiply by 100 first for precision)
+          const ratioBigInt = inAmountNormalized > BigInt(0) 
+            ? (outAmountNormalized * BigInt(100)) / inAmountNormalized 
+            : BigInt(0)
+          const ratioDisplay = (Number(ratioBigInt) / 100).toFixed(2)
+          
           console.error('[Quote API] Sanity check failed - impossible exchange rate detected:', {
             tokenIn: { symbol: tokenInInfo.symbol, decimals: tokenInInfo.decimals },
             tokenOut: { symbol: tokenOutInfo.symbol, decimals: tokenOutInfo.decimals },
@@ -132,7 +143,7 @@ export async function GET(request: NextRequest) {
             amountInHuman: formatUnits(inAmountBigInt, tokenInInfo.decimals),
             outAmountRaw,
             outAmountHuman: formatUnits(outAmountBigInt, tokenOutInfo.decimals),
-            ratio: (outAmountNormalized / inAmountNormalized).toString() + 'x',
+            ratio: ratioDisplay + 'x',
           })
           
           return NextResponse.json(
