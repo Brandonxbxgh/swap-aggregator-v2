@@ -249,6 +249,11 @@ export async function GET(request: NextRequest) {
     if (errorMessage.includes('OpenOcean API')) {
       statusCode = 502
     }
+    
+    // If error is from RPC rate limiting, use 503 Service Unavailable
+    if (errorMessage.includes('RPC rate limited or unavailable')) {
+      statusCode = 503
+    }
 
     // Return detailed error to client
     const errorDetails = {

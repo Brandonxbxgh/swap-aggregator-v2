@@ -8,6 +8,17 @@ const OPENOCEAN_API_BASE = 'https://open-api.openocean.finance/v4'
 // Legacy chains that use gasPrice instead of EIP-1559
 const LEGACY_CHAINS = [56, 137, 43114] // BNB Chain, Polygon, Avalanche
 
+// Ankr RPC URLs from environment variables (free public RPCs)
+const RPC_URLS: Record<number, string | undefined> = {
+  1: process.env.NEXT_PUBLIC_ETH_RPC_URL,
+  56: process.env.NEXT_PUBLIC_BSC_RPC_URL,
+  137: process.env.NEXT_PUBLIC_POLYGON_RPC_URL,
+  42161: process.env.NEXT_PUBLIC_ARBITRUM_RPC_URL,
+  10: process.env.NEXT_PUBLIC_OPTIMISM_RPC_URL,
+  8453: process.env.NEXT_PUBLIC_BASE_RPC_URL,
+  43114: process.env.NEXT_PUBLIC_AVALANCHE_RPC_URL,
+}
+
 // Cache public clients per chain ID to avoid recreating them
 const clientCache = new Map<number, PublicClient>()
 
@@ -25,9 +36,10 @@ export class OpenOceanAdapter implements SwapProvider {
         throw new Error(`Chain configuration not found for chain ID: ${chainId}`)
       }
 
+      const rpcUrl = RPC_URLS[chainId]
       const client = createPublicClient({
         chain,
-        transport: http(),
+        transport: http(rpcUrl || undefined),
       })
       clientCache.set(chainId, client)
     }
@@ -44,21 +56,32 @@ export class OpenOceanAdapter implements SwapProvider {
     let gasPriceToUse = params.gasPrice
 
     if (!gasPriceToUse) {
-      const client = this.getOrCreateClient(params.chainId)
+      try {
+        const client = this.getOrCreateClient(params.chainId)
 
-      if (LEGACY_CHAINS.includes(params.chainId)) {
-        // For legacy chains, fetch gasPrice
-        const gasPriceBigInt = await client.getGasPrice()
-        gasPriceToUse = gasPriceBigInt.toString()
-      } else {
-        // For EIP-1559 chains, fetch maxFeePerGas
-        // OpenOcean API uses gasPrice parameter for both legacy and EIP-1559 chains
-        const feeData = await client.estimateFeesPerGas()
-        if (feeData.maxFeePerGas) {
-          gasPriceToUse = feeData.maxFeePerGas.toString()
+        if (LEGACY_CHAINS.includes(params.chainId)) {
+          // For legacy chains, fetch gasPrice
+          const gasPriceBigInt = await client.getGasPrice()
+          gasPriceToUse = gasPriceBigInt.toString()
         } else {
-          throw new Error(`Failed to fetch gas price for chain ${params.chainId}: maxFeePerGas is not available`)
+          // For EIP-1559 chains, fetch maxFeePerGas
+          // OpenOcean API uses gasPrice parameter for both legacy and EIP-1559 chains
+          const feeData = await client.estimateFeesPerGas()
+          if (feeData.maxFeePerGas) {
+            gasPriceToUse = feeData.maxFeePerGas.toString()
+          } else {
+            throw new Error(`Failed to fetch gas price for chain ${params.chainId}: maxFeePerGas is not available`)
+          }
         }
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err)
+        // Check for common RPC rate limit or connection errors
+        if (errorMsg.includes('429') || errorMsg.includes('rate limit') || 
+            errorMsg.includes('too many requests') || errorMsg.toLowerCase().includes('throttle')) {
+          throw new Error('RPC rate limited or unavailable')
+        }
+        // Re-throw the original error if it's not a rate limit issue
+        throw err
       }
     }
 
