@@ -83,7 +83,7 @@ export async function GET(request: NextRequest) {
       },
       amountBaseUnits: amount,
       amountHuman: tokenInInfo?.decimals 
-        ? (BigInt(amount) / BigInt(10 ** tokenInInfo.decimals)).toString() + '.' + (BigInt(amount) % BigInt(10 ** tokenInInfo.decimals)).toString().padStart(tokenInInfo.decimals, '0')
+        ? formatUnits(BigInt(amount), tokenInInfo.decimals)
         : 'N/A',
       slippageBps,
       slippagePercent,
