@@ -1,23 +1,13 @@
 import { SwapProvider, QuoteParams, SwapQuote } from './swap-provider'
 import { getOpenOceanChainId, getChainById } from '@/config/chains'
 import { createPublicClient, http, PublicClient } from 'viem'
+import { RPC_URLS } from '@/config/rpc'
 
 // OpenOcean API V4 endpoint
 const OPENOCEAN_API_BASE = 'https://open-api.openocean.finance/v4'
 
 // Legacy chains that use gasPrice instead of EIP-1559
 const LEGACY_CHAINS = [56, 137, 43114] // BNB Chain, Polygon, Avalanche
-
-// Ankr RPC URLs from environment variables (free public RPCs)
-const RPC_URLS: Record<number, string | undefined> = {
-  1: process.env.NEXT_PUBLIC_ETH_RPC_URL,
-  56: process.env.NEXT_PUBLIC_BSC_RPC_URL,
-  137: process.env.NEXT_PUBLIC_POLYGON_RPC_URL,
-  42161: process.env.NEXT_PUBLIC_ARBITRUM_RPC_URL,
-  10: process.env.NEXT_PUBLIC_OPTIMISM_RPC_URL,
-  8453: process.env.NEXT_PUBLIC_BASE_RPC_URL,
-  43114: process.env.NEXT_PUBLIC_AVALANCHE_RPC_URL,
-}
 
 // Cache public clients per chain ID to avoid recreating them
 const clientCache = new Map<number, PublicClient>()
@@ -75,9 +65,10 @@ export class OpenOceanAdapter implements SwapProvider {
         }
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err)
+        const errorMsgLower = errorMsg.toLowerCase()
         // Check for common RPC rate limit or connection errors
-        if (errorMsg.includes('429') || errorMsg.includes('rate limit') || 
-            errorMsg.includes('too many requests') || errorMsg.toLowerCase().includes('throttle')) {
+        if (errorMsgLower.includes('429') || errorMsgLower.includes('rate limit') || 
+            errorMsgLower.includes('too many requests') || errorMsgLower.includes('throttle')) {
           throw new Error('RPC rate limited or unavailable')
         }
         // Re-throw the original error if it's not a rate limit issue
