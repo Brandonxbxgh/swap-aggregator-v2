@@ -64,12 +64,13 @@ export class OpenOceanAdapter implements SwapProvider {
     const url = new URL(`${OPENOCEAN_API_BASE}/${chainName}/swap`)
     url.searchParams.set('inTokenAddress', params.inTokenAddress)
     url.searchParams.set('outTokenAddress', params.outTokenAddress)
-    url.searchParams.set('amount', params.amount)
+    // V4 API uses amountDecimals (with token decimals) instead of deprecated amount parameter
+    url.searchParams.set('amountDecimals', params.amount)
     url.searchParams.set('slippage', (params.slippage || 1).toString())
     
-    // Append gasPrice exactly once if available
+    // Append gasPriceDecimals (V4 parameter) exactly once if available
     if (gasPriceToUse) {
-      url.searchParams.set('gasPrice', gasPriceToUse)
+      url.searchParams.set('gasPriceDecimals', gasPriceToUse)
     }
     
     if (params.account) {
@@ -83,6 +84,13 @@ export class OpenOceanAdapter implements SwapProvider {
     if (this.apiKey) {
       headers['Authorization'] = `Bearer ${this.apiKey}`
     }
+
+    // Log the exact OpenOcean API URL and parameters (server-side only, no API key)
+    console.log('[OpenOcean Adapter] Calling API:', {
+      url: url.toString(),
+      chainName,
+      queryParams: Object.fromEntries(url.searchParams.entries()),
+    })
 
     const response = await fetch(url.toString(), { headers })
 

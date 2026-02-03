@@ -63,15 +63,31 @@ export async function GET(request: NextRequest) {
     // Convert BPS to percentage for OpenOcean API (100 BPS = 1%)
     const slippagePercent = slippageBps / 100
 
-    // Log request for debugging (without exposing sensitive data)
-    console.log('[Quote API] Request:', {
+    // Find token information for detailed logging
+    const tokenInInfo = findToken(parsedChainId, inTokenAddress)
+    const tokenOutInfo = findToken(parsedChainId, outTokenAddress)
+
+    // Log comprehensive request details for debugging (server-side only, no sensitive data)
+    console.log('[Quote API] Request Details:', {
       chainId: parsedChainId,
-      chain: openOceanChain,
-      inToken: inTokenAddress.substring(0, 10) + '...',
-      outToken: outTokenAddress.substring(0, 10) + '...',
-      hasAccount: !!account,
+      chainName: openOceanChain,
+      tokenIn: {
+        address: inTokenAddress,
+        symbol: tokenInInfo?.symbol || 'Unknown',
+        decimals: tokenInInfo?.decimals || 'Unknown',
+      },
+      tokenOut: {
+        address: outTokenAddress,
+        symbol: tokenOutInfo?.symbol || 'Unknown',
+        decimals: tokenOutInfo?.decimals || 'Unknown',
+      },
+      amountBaseUnits: amount,
+      amountHuman: tokenInInfo?.decimals 
+        ? (BigInt(amount) / BigInt(10 ** tokenInInfo.decimals)).toString() + '.' + (BigInt(amount) % BigInt(10 ** tokenInInfo.decimals)).toString().padStart(tokenInInfo.decimals, '0')
+        : 'N/A',
       slippageBps,
       slippagePercent,
+      hasAccount: !!account,
     })
 
     const apiKey = process.env.OPENOCEAN_API_KEY
@@ -87,12 +103,50 @@ export async function GET(request: NextRequest) {
       gasPrice: gasPrice || undefined,
     })
 
-    // Find token information
-    const tokenInInfo = findToken(parsedChainId, inTokenAddress)
-    const tokenOutInfo = findToken(parsedChainId, outTokenAddress)
-
     // Store the original raw outAmount
     const outAmountRaw = quote.outAmount
+
+    // Sanity check: Detect impossible exchange rates
+    // If output amount is more than 1000x input amount for similar-value tokens, flag as error
+    // This catches issues like getting 19,000 BNB for 5 USDT
+    try {
+      const inAmountBigInt = BigInt(amount)
+      const outAmountBigInt = BigInt(outAmountRaw)
+      
+      // Only check if both token decimals are known
+      if (tokenInInfo?.decimals && tokenOutInfo?.decimals) {
+        // Normalize both amounts to 18 decimals for comparison
+        const inAmountNormalized = tokenInInfo.decimals === 18 
+          ? inAmountBigInt 
+          : inAmountBigInt * BigInt(10 ** (18 - tokenInInfo.decimals))
+        const outAmountNormalized = tokenOutInfo.decimals === 18 
+          ? outAmountBigInt 
+          : outAmountBigInt * BigInt(10 ** (18 - tokenOutInfo.decimals))
+        
+        // Check if output is more than 1000x the input (clearly impossible for most token pairs)
+        if (outAmountNormalized > inAmountNormalized * BigInt(1000)) {
+          console.error('[Quote API] Sanity check failed - impossible exchange rate detected:', {
+            tokenIn: { symbol: tokenInInfo.symbol, decimals: tokenInInfo.decimals },
+            tokenOut: { symbol: tokenOutInfo.symbol, decimals: tokenOutInfo.decimals },
+            amountIn: amount,
+            amountInHuman: formatUnits(inAmountBigInt, tokenInInfo.decimals),
+            outAmountRaw,
+            outAmountHuman: formatUnits(outAmountBigInt, tokenOutInfo.decimals),
+            ratio: (outAmountNormalized / inAmountNormalized).toString() + 'x',
+          })
+          
+          return NextResponse.json(
+            { 
+              error: 'Invalid quote received',
+              details: `The quote appears to have an impossible exchange rate. Expected reasonable ratio but got output >> input. This may indicate an API parameter error. Please try again or contact support.`,
+            },
+            { status: 502 }
+          )
+        }
+      }
+    } catch (e) {
+      console.warn('[Quote API] Sanity check calculation error (non-fatal):', e)
+    }
 
     // Format human-readable outAmount if tokenOut decimals are available
     let outAmount = outAmountRaw

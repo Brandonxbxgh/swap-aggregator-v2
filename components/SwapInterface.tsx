@@ -381,9 +381,17 @@ export function SwapInterface() {
             <div className="mb-6 p-4 bg-gray-100 dark:bg-gray-700 rounded-lg">
               <h3 className="font-semibold mb-3">Quote</h3>
               <div className="text-sm space-y-2">
+                {/* Input Amount (Human-readable) */}
+                <div className="flex justify-between">
+                  <span className="text-gray-600 dark:text-gray-400">Input amount:</span>
+                  <span className="font-medium">
+                    {amountIn} {quote.tokenIn?.symbol || ''}
+                  </span>
+                </div>
+                
                 {/* Output Amount */}
                 <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Output:</span>
+                  <span className="text-gray-600 dark:text-gray-400">Output amount:</span>
                   <span className="font-medium">
                     ~ {quote.outAmount} {quote.tokenOut?.symbol || ''}
                   </span>
@@ -401,16 +409,16 @@ export function SwapInterface() {
                 
                 {/* Estimated Gas Units */}
                 <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Estimated gas units:</span>
+                  <span className="text-gray-600 dark:text-gray-400">Estimated gas:</span>
                   <span className="font-medium">
-                    {parseInt(quote.estimatedGas).toLocaleString()}
+                    {parseInt(quote.estimatedGas).toLocaleString()} units
                   </span>
                 </div>
                 
                 {/* Estimated Gas Cost */}
                 {quote.gasCostNative && parseFloat(quote.gasCostNative) > 0 && (
                   <div className="flex justify-between">
-                    <span className="text-gray-600 dark:text-gray-400">Estimated gas cost:</span>
+                    <span className="text-gray-600 dark:text-gray-400">Gas cost:</span>
                     <span className="font-medium">
                       ~ {parseFloat(quote.gasCostNative).toFixed(6)} {getNativeSymbol(chainId)}
                     </span>
